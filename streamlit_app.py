@@ -8,15 +8,11 @@ session = get_active_session()
 
 st.title("LinkedIn Job Analytics Dashboard")
 
-# ===============================
 # 1. Top 10 jobs par industrie
-# ===============================
 st.header("Top 10 des titres de postes les plus publiés par industrie")
 
 
-# ----------------------------
 # Requête SQL avec filtre spécialités > 10 titres
-# ----------------------------
 query_top_titles = """
 SELECT *
 FROM (
@@ -48,17 +44,16 @@ ORDER BY speciality, rank;
 # Exécution de la requête avec Snowpark et conversion en pandas
 df_titles = session.sql(query_top_titles).to_pandas()
 
-# ----------------------------
 # Filtrage interactif par spécialité
-# ----------------------------
+
 specialities = df_titles["SPECIALITY"].unique()
 selected_speciality = st.selectbox("Choisir une spécialité", specialities)
 
 df_filtered = df_titles[df_titles["SPECIALITY"] == selected_speciality]
 
-# ----------------------------
+
 # Graphique Altair
-# ----------------------------
+
 chart_titles = alt.Chart(df_filtered).mark_bar().encode(
     x=alt.X('NB_JOBS:Q', title='Nombre d’offres'),
     y=alt.Y('TITLE:N', sort='-x', title='Titre du poste'),
@@ -72,15 +67,12 @@ chart_titles = alt.Chart(df_filtered).mark_bar().encode(
 st.altair_chart(chart_titles)
 
 
-# ===============================
 # 2. Top salaires par industrie
-# ===============================
 st.header("Top 10 des postes les mieux rémunérés par industrie")
 
 
-# ----------------------------
 # Requête SQL avec filtre spécialités > 10 titres
-# ----------------------------
+
 query_top_salary = """
 SELECT *
 FROM (
@@ -113,17 +105,16 @@ ORDER BY speciality, rank;
 # Exécution de la requête avec Snowpark et conversion en pandas
 df_salary = session.sql(query_top_salary).to_pandas()
 
-# ----------------------------
 # Filtrage interactif par spécialité
-# ----------------------------
+
 specialities_salary = df_salary["SPECIALITY"].unique()
 selected_speciality_salary = st.selectbox("Choisir une spécialité (salaires)", specialities_salary)
 
 df_filtered_salary = df_salary[df_salary["SPECIALITY"] == selected_speciality_salary]
 
-# ----------------------------
+
 # Graphique Altair
-# ----------------------------
+
 chart_salary = alt.Chart(df_filtered_salary).mark_bar().encode(
     x=alt.X('MAX_SALARY:Q', title='Salaire maximum'),
     y=alt.Y('TITLE:N', sort='-x', title='Titre du poste'),
@@ -136,9 +127,9 @@ chart_salary = alt.Chart(df_filtered_salary).mark_bar().encode(
 
 st.altair_chart(chart_salary)
 
-# ===============================
+
 # 3. Répartition par taille d’entreprise
-# ===============================
+
 st.header("Répartition des offres par taille d’entreprise")
 
 query_company_size = """
@@ -170,9 +161,8 @@ df_size = session.sql(query_company_size).to_pandas()
 st.bar_chart(df_size.set_index('COMPANY_SIZE_GROUP')['NB_JOBS'])
 
 
-# ===============================
 # 4. Répartition par secteur
-# ===============================
+
 st.header("Répartition des offres d’emploi par secteur d’activité")
 
 query_sector = """
@@ -194,9 +184,8 @@ df_sector = session.sql(query_sector).to_pandas()
 st.bar_chart(df_sector.set_index('SPECIALITY')['NB_JOBS'])
 
 
-# ===============================
 # 5. Répartition par type d’emploi
-# ===============================
+
 st.header("Répartition des offres d’emploi par type d’emploi")
 
 query5 = """
