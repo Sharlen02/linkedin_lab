@@ -1,0 +1,70 @@
+Dans ce projet, l’objectif était de charger plusieurs fichiers CSV et JSON issus d’un bucket S3 public dans Snowflake, puis de construire un environnement d’analyse exploitable pour des visualisations via Streamlit dans Snowflake.
+Le travail a mis en évidence plusieurs difficultés techniques liées au format des données, au chargement Snowflake, à la transformation des JSON et à la mise en place du dashboard.
+
+1. Problèmes rencontrés lors du chargement des données
+1.1. Erreurs de timestamp dans les fichiers CSV
+Lors du chargement de job_postings.csv, une erreur est apparue sur la colonne original_listed_time avec une valeur de type Unix en millisecondes, par exemple 1690000000000.0.
+Snowflake ne reconnaissait pas ce format directement comme un timestamp.
+Une deuxième erreur similaire est apparue dans employee_counts.csv, cette fois avec une valeur de type float en secondes, par exemple 1692644644.2779734.
+Là encore, Snowflake refusait la conversion automatique.
+
+Solution apportée
+La solution consistait à éviter de charger directement ces colonnes en type TIMESTAMP dans la table brute.
+Les colonnes ont d’abord été chargées sous forme de texte, puis converties dans une couche de transformation intermédiaire.
+Pour les timestamps en millisecondes, la conversion a été faite en divisant par 1000 avant l’appel à TO_TIMESTAMP.
+Pour les valeurs en secondes avec décimales, la partie décimale a été supprimée avec FLOOR puis convertie explicitement en entier.
+
+Cette approche a permis d’assurer un chargement fiable et de mieux contrôler la qualité des données.
+
+2. Problèmes de typage et de création de colonnes
+Une autre erreur est apparue lors de la conversion des timestamps : TO_TIMESTAMP(FLOOR(TO_DOUBLE(...))) produisait une erreur de type dans Snowflake.
+Le moteur refusait le résultat intermédiaire de FLOOR sans cast explicite.
+
+Solution apportée
+La correction a consisté à caster explicitement la valeur en entier avant l’appel à TO_TIMESTAMP.
+Cette étape a permis de respecter le typage attendu par Snowflake et de sécuriser la transformation.
+
+
+3. Problèmes rencontrés avec les fichiers JSON
+Lors de la transformation de companies.json, la table créée dans Silver est apparue vide, avec uniquement les en-têtes.
+Cela montrait que la structure JSON n’était pas interprétée correctement.
+
+Cause identifiée
+Le contenu JSON semblait être un tableau d’objets plutôt qu’un objet unique par ligne.
+Dans ce cas, l’accès direct avec data:company_id ne renvoie rien.
+De plus, une erreur de syntaxe est apparue avec LATERAL FLATTEN, car la requête était mal construite.
+
+Solutions apportées
+La solution a été d’utiliser LATERAL FLATTEN correctement, avec la syntaxe adaptée de Snowflake, et d’extraire les champs depuis value:... plutôt que depuis data:....
+Cette méthode a permis de convertir les structures JSON imbriquées en lignes exploitables.
+
+4. La table job_postings
+en vérifiant la composition de la table LINKEDIN.BRONZE.job_postings avec la requête SELECT *, un problème majeur a été identifié dans la colonne initialement nommée company_name.
+Au lieu de chaînes de caractères (ex: "Google", "Microsoft"), la colonne affichait des valeurs numériques suivies d'une décimale (ex: 14628022.0, 4815837.0).
+L'analyse par entreprise etait impossible en l'état.
+
+Notre investigation a révélé deux causes principales :
+Normalisation des Données : Le fichier source job_postings.csv ne contient pas les noms des entreprises, mais leurs identifiants uniques (company_id). 
+Incohérence de Typage : Le suffixe .0 indique que Snowflake a interprété ces IDs comme des FLOAT (nombres à virgule) lors du chargement, alors qu'ils devraient être traités comme des STRING ou des INT pour servir de clés de jointure.
+
+Solution apportée
+Pour corriger cette situation et enrichir la donnée, nous avons effectué une rectification de la Couche Bronze.
+En Renommant la colonne pour refléter sa nature réelle et éviter toute confusion future.
+company_name ➔ company_id.
+
+
+5. Problèmes de jointure et de noms de colonnes
+Une autre erreur s’est produite lorsque la requête utilisait listed_time alors que la colonne disponible dans la table avait été renommée en listed_time_ts.
+
+Solution apportée
+Il a fallu vérifier le schéma de la table avec DESC TABLE et adapter les noms de colonnes à la structure réellement créée. Cette étape a évité les erreurs d’identifiant invalide.
+
+6. Bilan
+Ce projet a mis en évidence plusieurs bonnes pratiques importantes en data engineering :
+-charger les données brutes sans transformation agressive,
+-séparer les couches Bronze, Silver et Gold,
+-traiter explicitement les formats de timestamp non standards,
+-utiliser FLATTEN pour les JSON imbriqués,
+-éviter SELECT * dans les pipelines de production,
+-limiter les volumes affichés dans Streamlit,
+-vérifier systématiquement le schéma des tables avant d’écrire des requêtes analytiques.
